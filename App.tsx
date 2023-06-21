@@ -9,16 +9,50 @@ import {
   Image,
   StyleSheet,
   Alert,
+  StatusBar,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import NetInfo from '@react-native-community/netinfo';
 import { NavigationContainer, useNavigation } from '@react-navigation/native';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { StackNavigationProp, createStackNavigator } from '@react-navigation/stack';
 import ContactDetailsScreen from './ContactDetailsScreen';
+// import SettingsScreen from './SettingsScreen';
+import { FullScreen, useFullScreenHandle } from "react-full-screen";
+import OneSignal from 'react-native-onesignal';
+
+function MyComponent() {
+  useEffect(() => {
+    OneSignal.setLogLevel(6, 0);
+    OneSignal.setAppId('16bc18f4-d0c0-4734-9423-a4dab550dd47');
+    OneSignal.setRequiresUserPrivacyConsent(false);  
+    OneSignal.promptForPushNotificationsWithUserResponse((response) => {   
+      console.log('Prompt response:', response);   
+    });
+
+    OneSignal.setNotificationOpenedHandler((notification) => {
+      console.log('Opened notification:', notification);
+    });
+
+    return () => {
+      OneSignal.clearHandlers();
+    };
+  }, []);
+}
+
+
+
+
+const MyApp = () => {
+  return (
+    <StatusBar barStyle="dark-content" hidden={false} backgroundColor="#0d0d0d" translucent={true} />
+  );
+};
+
 
 const sheetUrl =
-'https://sheets.googleapis.com/v4/spreadsheets/KEY/values/A2:G3000';
-const apiKey = 'KEY';
+'https://sheets.googleapis.com/v4/spreadsheets/key/values/A2:G3000';
+const apiKey = 'api-key';
 
 export interface Contact {
   rank: string;
@@ -31,11 +65,11 @@ export interface Contact {
 }
 
 type RootStackParamList = {
-  Home: undefined;
+  Contacts: undefined;
   ContactDetails: { contact: Contact };
 };
 
-type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Home'>;
+type HomeScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Contacts'>;
 
 const HomeScreen = () => {
   const navigation = useNavigation<HomeScreenNavigationProp>();
@@ -124,6 +158,10 @@ const HomeScreen = () => {
     setFilteredContactList(filteredContacts);
   };
 
+  // const clearSearch = () => {
+  //   setSearchQuery('');
+  // };
+
   const renderContactItem = ({ item }: { item: Contact }) => (
     <TouchableOpacity
       style={styles.contactItem}
@@ -144,25 +182,54 @@ const HomeScreen = () => {
     navigation.navigate('ContactDetails', { contact });
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     checkInternetConnection();
     if (offline) {
       Alert.alert('Offline', 'Please check your internet connection.');
     } else {
       setLoading(true);
-      fetchContacts();
+      try {
+        const response = await fetch(`${sheetUrl}?key=${apiKey}`);
+        const data = await response.json();
+        const contacts = data.values.map((contact: string[]) => ({
+          rank: contact[0],
+          name: contact[1],
+          mobile: contact[2],
+          office: contact[3],
+          office2: contact[4],
+          fax: contact[5],
+          mail: contact[6],
+        })) as Contact[];
+        setContactList(contacts);
+        setFilteredContactList(contacts);
+        saveData(contacts);
+      } catch (error) {
+        console.error('Error fetching contacts:', error);
+      }
+      setLoading(false);
     }
   };
 
   return (
     <View style={styles.container}>
       <View style={styles.toolbar}>
-        <TextInput
-          style={styles.searchBar}
-          placeholder="Search"
-          value={searchQuery}
-          onChangeText={onSearchInput}
-        />
+        
+      <View style={styles.searchBarContainer}>
+      <Image source={require('./assets/search-outline.png')} style={styles.searchIcon} />
+      <TextInput
+        style={[styles.searchBarContainer, styles.searchInput, { color: '#fff' }]} // Set the input text color
+        placeholder="Search"
+        placeholderTextColor="#999999"
+        value={searchQuery}
+        onChangeText={onSearchInput}
+      />
+            {/* {searchQuery !== '' && (
+          <TouchableOpacity onPress={clearSearch} style={styles.clearButton}>
+            <Image source={require('./assets/close-circle-outline.png')} style={styles.clearIcon} />
+          </TouchableOpacity>
+        )} */}
+
+    </View>
         <TouchableOpacity onPress={handleRefresh}>
           <Image
             style={styles.syncIcon}
@@ -172,7 +239,12 @@ const HomeScreen = () => {
       </View>
       {loading ? (
         <View style={styles.content}>
-          <ActivityIndicator size="large" style={styles.loadingIndicator} />
+          <ActivityIndicator
+        size="large"
+        color="#3880ff" // Use "auto" to adapt the color based on platform's default styling
+        style={styles.loadingIndicator}
+      />
+
         </View>
       ) : offline ? (
         <View style={styles.content}>
@@ -196,92 +268,294 @@ const HomeScreen = () => {
 
 const Stack = createStackNavigator<RootStackParamList>();
 
+const Tab = createBottomTabNavigator();
+
+
+
+const ContactsStack = () => {
+  return (
+    <Stack.Navigator
+      initialRouteName="Contacts"
+      screenOptions={{
+        gestureEnabled: true,
+        gestureDirection: 'horizontal',
+        transitionSpec: {
+          open: {
+            animation: 'timing',
+            config: {
+              duration: 250,
+            },
+          },
+          close: {
+            animation: 'timing',
+            config: {
+              duration: 250,
+            },
+          },
+        },
+        cardStyleInterpolator: ({ current, next, layouts }) => {
+          return {
+            cardStyle: {
+              transform: [
+                {
+                  translateX: current.progress.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [layouts.screen.width, 0],
+                  }),
+                },
+                {
+                  translateX: next
+                    ? next.progress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [0, -layouts.screen.width],
+                      })
+                    : 0,
+                },
+              ],
+            },
+            overlayStyle: {
+              opacity: current.progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [0, 0.5],
+              }),
+            },
+          };
+        },
+      }}
+    >
+
+      
+      <Stack.Screen
+        name="Contacts"
+        component={HomeScreen}
+        options={{
+          title: 'Contacts',
+          headerShown: false, // hide contacts titel head
+        }}
+      />
+      <Stack.Screen
+        name="ContactDetails"
+        component={ContactDetailsScreen}
+        options={{
+          title: 'Contact Details',
+          headerShown: true,
+          headerTitleAlign: 'center',
+          headerStyle: {
+            backgroundColor: '#0d0d0d', // Set the background color of the header
+            // width: '20%', // Set the width of the header
+          },
+          headerTitleStyle: {
+            color: '#ffffff', // Set the color of the header title
+          },
+          headerTintColor: '#ffffff', // Set the color of the back button
+        }}
+      />
+    </Stack.Navigator>
+  );
+};
+
+
+
+const SettingsScreen = () => {
+  return (
+    <View style={styles.settinsx}>
+      <Text style={styles.settingsText}>This is the Settings screen.</Text>
+    </View>
+  );
+};
+
 const App = () => {
   return (
     <NavigationContainer>
-      <Stack.Navigator>
-        <Stack.Screen name="Home" component={HomeScreen} />
-        <Stack.Screen
-          name="ContactDetails"
-          component={ContactDetailsScreen}
+      <Tab.Navigator
+        screenOptions={{
+          tabBarStyle: { backgroundColor: '#0d0d0d', borderWidth: 3, borderColor: '#0d0d0d' },
+        }}
+      >
+        <Tab.Screen
+          name="Contacts"
+          component={ContactsStack}
+          options={{
+            title: 'Contacts',
+            headerShown: false, //show and hide header "contacts"
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={
+                  focused
+                    ? require('./assets/people-circle-outline-b.png')
+                    : require('./assets/people-circle-outline-w.png')
+                }
+                style={{ width: 24, height: 24 }}
+              />
+            ),
+          }}
         />
-      </Stack.Navigator>
+        <Tab.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{
+            title: 'Settings',
+            headerShown: true, //show and hide header "contacts"
+            headerTitleAlign: 'center',
+            headerStyle: {
+              backgroundColor: '#0d0d0d', // Set the background color of the header
+              // width: '100%', // Set the width of the header
+            },
+            headerTitleStyle: {
+              color: '#ffffff', // Set the color of the header title
+            },
+            
+            
+            tabBarIcon: ({ focused }) => (
+              <Image
+                source={
+                  focused
+                    ? require('./assets/settings-outline-b.png')
+                    : require('./assets/settings-outline-w.png')
+                }
+                style={{ width: 24, height: 24 }}
+              />
+            ),
+          }}
+        />
+      </Tab.Navigator>
     </NavigationContainer>
   );
 };
 
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#0d0d0d',
   },
+  // darkContainer: {
+  //   backgroundColor: '#fff',
+  // },
+
+  settinsx: {
+    flex: 1,
+    backgroundColor: '#1e1e1e',
+  },
+
   toolbar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#ccc',
+    // borderBottomColor: '#ccc',
   },
-  searchBar: {
+  // searchBar: {
+  //   flex: 1,
+  //   height: 40,
+  //   paddingHorizontal: 10,
+  //   borderWidth: 1,
+  //   // borderColor: '#ccc',
+  //   borderRadius: 12,
+  //   marginRight: 10,
+  //   // color: '#0d0d0d',
+  //   backgroundColor: '#1e1e1e',
+  //   flexDirection: 'row',
+  // },
+
+  searchBarContainer: {
     flex: 1,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#e0e0e0',
-    paddingHorizontal: 16,
-    marginRight: 8,
-    fontSize: 16,
+    height: 35,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1e1e1e',
+    paddingLeft: 10,
+    borderRadius: 12,
+    marginRight: 10,
+  },
+  searchInput: {
+    // flex: 1,
+    // height: 40,
+    // flexDirection: 'row',
+    // alignItems: 'center',
+    // // backgroundColor: '#FFFFFF',
+    // paddingLeft: 10,
+    // borderRadius: 5,
+    // marginRight: 10,
+  },
+
+  searchIcon: {
+    width: 20,
+    height: 20,
+    marginRight: 10,
   },
   syncIcon: {
     width: 24,
     height: 24,
-    tintColor: '#666',
+    backgroundColor: '#3880ff',
+    borderRadius: 12,
+    marginRight: 0,
   },
   content: {
     flex: 1,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingIndicator: {
     marginBottom: 16,
   },
   offlineMessage: {
-    fontSize: 18,
-    color: '#888',
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyList: {
     fontSize: 16,
     color: '#888',
-    textAlign: 'center',
-    marginVertical: 16,
   },
-  contactItem: {
+  emptyList: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#888',
+    alignSelf: 'center',
+  },
+  contactItem: { //contacts list line colur
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 7,
     paddingHorizontal: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    // borderBottomWidth: 1,
+    // borderBottomColor: '#ccc',
+    backgroundColor: '#1e1e1e',
   },
   avatar: {
-    width: 48,
-    height: 48,
-    marginRight: 12,
+    width: 33,
+    height: 33,
+    borderRadius: 24,
   },
   contactDetails: {
-    flex: 1,
+    marginLeft: 16,
   },
   rank: {
     fontSize: 16,
     fontWeight: 'bold',
+    color: '#fff',
   },
   name: {
     fontSize: 14,
-    color: '#666',
+    color: '#888',
   },
+  settingsText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#fff',
+    alignSelf: 'center',
+    marginVertical: 16,
+  },
+
+  //   clearButton: {
+  //   // paddingHorizontal: 8,
+  //   justifyContent: 'center',
+  //   alignItems: 'center',
+  // },
+  // clearIcon: {
+  //   width: 24,
+  //   height: 24,
+  //   backgroundColor: '#3880ff',
+  //   borderRadius: 12,
+  //   marginRight: 0,
+  // },
+
 });
 
 export default App;
