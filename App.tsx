@@ -335,43 +335,6 @@ const ContactsStack = () => {
 };
 
 
-const SettingsScreen = () => {
-  const showDeveloperInfo = () => {
-    const developerInfo = 'Developed by PC 82641 Sameera Premathunga';
-
-    Alert.alert('Developer Info', developerInfo, [{ text: 'Close' }]);
-  };
-
-  const handleContactDeveloper = () => {
-    const whatsappNumber = '0701672420'; // Replace with the developer's WhatsApp number
-    const whatsappMessage = 'Hello, developer!'; // Replace with your desired initial message
-
-    const whatsappUrl = `whatsapp://send?phone=${whatsappNumber}&text=${encodeURIComponent(whatsappMessage)}`;
-
-    Linking.openURL(whatsappUrl)
-      .catch(() => {
-        // Handle error if WhatsApp is not installed or configured
-        console.log('WhatsApp app is not installed.!');
-      });
-  };
-
-  return (
-    <View style={styles.settingsContainer}>
-      <Image
-        source={require('./assets/itlogo.jpg')} // Replace 'path_to_your_image' with the actual image path
-        style={styles.image}
-      />
-      <TouchableOpacity onPress={showDeveloperInfo}>
-        <Text style={styles.title}>Developed by</Text>
-      </TouchableOpacity>
-      <Text style={styles.subtitle}>Information Technology Division</Text>
-      <Text style={styles.subtitle}>V 1.0.0</Text>
-      <TouchableOpacity onPress={handleContactDeveloper}>
-        <Text style={styles.contactButton}>Contact Developer</Text>
-      </TouchableOpacity>
-    </View>
-  );
-};
 
 
 const App = () => {
